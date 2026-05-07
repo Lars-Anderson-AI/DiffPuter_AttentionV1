@@ -5,11 +5,11 @@ from sklearn.preprocessing import LabelEncoder, OneHotEncoder
 import os
 import json
 
-DATA_DIR = '/kaggle/working/DiffPuter/datasets'
+DATA_DIR = '/kaggle/working/DiffPuterBased/datasets'
 
 def load_dataset(dataname, idx = 0, mask_type = 'MCAR', ratio = '30'):
-    data_dir = f'/kaggle/working/DiffPuter/datasets/{dataname}'
-    info_path = f'/kaggle/working/DiffPuter/datasets/Info/{dataname}.json'
+    data_dir = f'/kaggle/working/DiffPuterBased/datasets/{dataname}'
+    info_path = f'/kaggle/working/DiffPuterBased/datasets/Info/{dataname}.json'
 
     with open(info_path, 'r') as f:
         info = json.load(f)
@@ -170,9 +170,9 @@ def mean_std(data, mask):
 
 def get_eval(dataname, X_recon, X_true, truth_cat_idx, num_num, cat_bin_num, mask, oos = False):
 
-    data_dir = f'/kaggle/working/DiffPuter/datasets/{dataname}'
+    data_dir = f'/kaggle/working/DiffPuterBased/datasets/{dataname}'
 
-    info_path = f'/kaggle/working/DiffPuter/datasets/Info/{dataname}.json'
+    info_path = f'/kaggle/working/DiffPuterBased/datasets/Info/{dataname}.json'
 
     with open(info_path, 'r') as f:
         info = json.load(f)
