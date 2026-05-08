@@ -25,6 +25,16 @@ class DPWrapper(torch.nn.DataParallel):
             elif sigma.numel() == 1:
                 sigma = sigma.view(1).expand(x.shape[0])
         return super().forward(x, sigma, *args, **kwargs)
+    @property
+    def sigma_min(self):
+        return self.module.sigma_min
+
+    @property
+    def sigma_max(self):
+        return self.module.sigma_max
+
+    def round_sigma(self, sigma):
+        return self.module.round_sigma(sigma)
 # =====================================================================
 
 warnings.filterwarnings('ignore')
