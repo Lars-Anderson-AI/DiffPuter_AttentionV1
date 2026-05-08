@@ -13,6 +13,20 @@ from model import MLPDiffusion, Model
 from dataset import load_dataset, get_eval, mean_std
 from diffusion_utils import sample_step, impute_mask
 
+# =====================================================================
+# TAMBAHAN UNTUK MULTI-GPU: Membantu DataParallel memproses nilai skalar
+# =====================================================================
+class DPWrapper(torch.nn.DataParallel):
+    def forward(self, x, sigma, *args, **kwargs):
+        # Jika sigma adalah nilai tunggal (skalar), perbanyak sebanyak jumlah batch
+        if isinstance(sigma, torch.Tensor):
+            if sigma.dim() == 0:
+                sigma = sigma.unsqueeze(0).expand(x.shape[0])
+            elif sigma.numel() == 1:
+                sigma = sigma.view(1).expand(x.shape[0])
+        return super().forward(x, sigma, *args, **kwargs)
+# =====================================================================
+
 warnings.filterwarnings('ignore')
 
 parser = argparse.ArgumentParser(description='Missing Value Imputation')
@@ -106,6 +120,13 @@ if __name__ == '__main__':
 
         model = Model(denoise_fn = denoise_fn, hid_dim = in_dim).to(device)
 
+                # === TAMBAHAN MULTI-GPU UNTUK TRAINING ===
+        if torch.cuda.device_count() > 1:
+            if iteration == 0: # Print hanya sekali
+                print(f"Menggunakan {torch.cuda.device_count()} GPUs untuk Training!")
+            model = torch.nn.DataParallel(model)
+        # =========================================
+
         optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay=0)
         scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.9, patience=50)
 
@@ -139,7 +160,9 @@ if __name__ == '__main__':
             if curr_loss < best_loss:
                 best_loss = curr_loss
                 patience = 0
-                torch.save(model.state_dict(), f'{ckpt_dir}/{iteration}/model.pt')
+                # === MODIFIKASI MULTI-GPU SAVE ===
+                model_to_save = model.module if hasattr(model, 'module') else model
+                torch.save(model_to_save.state_dict(), f'{ckpt_dir}/{iteration}/model.pt')
             else:
                 patience += 1
                 if patience == 500:
@@ -149,7 +172,9 @@ if __name__ == '__main__':
             pbar.set_postfix(loss=curr_loss)
 
             if epoch % 1000 == 0:
-                torch.save(model.state_dict(), f'{ckpt_dir}/{iteration}/model_{epoch}.pt')
+                # === MODIFIKASI MULTI-GPU SAVE ===
+                model_to_save = model.module if hasattr(model, 'module') else model
+                torch.save(model_to_save.state_dict(), f'{ckpt_dir}/{iteration}/model_{epoch}.pt')
 
         end_time = time.time()
 
@@ -175,7 +200,11 @@ if __name__ == '__main__':
             # ==========================================================
 
             net = model.denoise_fn_D
-
+            # === TAMBAHAN MULTI-GPU UNTUK IMPUTASI ===
+            if torch.cuda.device_count() > 1:
+                net = DPWrapper(net)
+            # =========================================
+            
             num_samples, dim = X.shape[0], X.shape[1]
             rec_X = impute_mask(net, impute_X, mask_train, num_samples, dim, num_steps, device)
             
@@ -227,6 +256,11 @@ if __name__ == '__main__':
             # ==========================================================
             net = model.denoise_fn_D
 
+            # === TAMBAHAN MULTI-GPU UNTUK IMPUTASI ===
+            if torch.cuda.device_count() > 1:
+                net = DPWrapper(net)
+            # =========================================
+            
             num_samples, dim = X_test.shape[0], X_test.shape[1]
             rec_X = impute_mask(net, impute_X, mask_test, num_samples, dim, num_steps, device)
             
