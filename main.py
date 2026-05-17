@@ -56,8 +56,10 @@ args = parser.parse_args()
 # check cuda
 if args.gpu != -1 and torch.cuda.is_available():
     args.device = f'cuda:{args.gpu}'
+    print("Menggunakan GPU!")
 else:
     args.device = 'cpu'
+    print("Menggunakan CPU!")
 
 
 if __name__ == '__main__':
