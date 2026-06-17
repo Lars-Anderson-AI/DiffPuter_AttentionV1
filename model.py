@@ -95,12 +95,28 @@ class FourierEmbedding(torch.nn.Module):
         return x
 
 class MLPDiffusion(nn.Module):
-    def __init__(self, d_in, dim_t = 512):
+    def __init__(self, d_in, dim_t=512, num_tokens=16, num_heads=4):
         super().__init__()
         self.dim_t = dim_t
+        self.num_tokens = num_tokens
+        
+        # Ensure dim_t can be evenly split into tokens
+        assert dim_t % num_tokens == 0, "dim_t must be perfectly divisible by num_tokens"
+        self.token_dim = dim_t // num_tokens
 
+        # Project input to hidden dimension
         self.proj = nn.Linear(d_in, dim_t)
 
+        # --- Added Attention Mechanism Block ---
+        # Treating split features as a sequence of tokens
+        self.attn = nn.MultiheadAttention(
+            embed_dim=self.token_dim, 
+            num_heads=num_heads, 
+            batch_first=True
+        )
+        self.ln_attn = nn.LayerNorm(dim_t)
+
+        # Your original MLP layers
         self.mlp = nn.Sequential(
             nn.Linear(dim_t, dim_t * 2),
             nn.SiLU(),
@@ -111,21 +127,44 @@ class MLPDiffusion(nn.Module):
             nn.Linear(dim_t, d_in),
         )
 
+        # Your original Time Embedding layers
         self.map_noise = PositionalEmbedding(num_channels=dim_t)
         self.time_embed = nn.Sequential(
             nn.Linear(dim_t, dim_t),
             nn.SiLU(),
             nn.Linear(dim_t, dim_t)
         )
-    
+
+    # PERUBAHAN: Menyesuaikan parameter agar dipanggil dengan aman oleh class Precond
     def forward(self, x, noise_labels, class_labels=None):
+        
+        # 1. Compute Time Embedding (DIKEMBALIKAN KE LOGIKA ASLI)
         emb = self.map_noise(noise_labels)
         emb = emb.reshape(emb.shape[0], 2, -1).flip(1).reshape(*emb.shape) # swap sin/cos
-        emb = self.time_embed(emb)
+        emb = self.time_embed(emb) # Shape: (B, dim_t)
+        
+        # 2. Initial Feature Projection
+        h = self.proj(x)  # Shape: (B, dim_t)
+        orig_shape = h.shape
+        
+        # 3. Feature-Splitting Self-Attention Block
+        # Dynamically reshape to (Batch, num_tokens, token_dim)
+        h_tokens = h.view(-1, self.num_tokens, self.token_dim)
+        
+        # Compute multi-head self-attention
+        attn_out, _ = self.attn(h_tokens, h_tokens, h_tokens)
+        
+        # Apply residual connection, reshape back, and normalize
+        h_tokens = h_tokens + attn_out
+        h = h_tokens.view(*orig_shape)
+        h = self.ln_attn(h)
 
-        x = self.proj(x) 
-        x = x + emb
-        return self.mlp(x)
+        # 4. Inject Time Embedding ke dalam fitur yang sudah melewati Attention
+        h = h + emb  
+
+        # 5. Final MLP mapping back to data space
+        out = self.mlp(h)
+        return out
 
 
 class Precond(nn.Module):
