@@ -101,7 +101,7 @@ if __name__ == '__main__':
 
         ## M-Step: Density Estimation
      
-        ckpt_dir = f'/kaggle/working/DiffPuter_Attention/ckpt/{dataname}/rate{ratio}/{mask_type}/{split_idx}/{num_trials}_{num_steps}'
+        ckpt_dir = f'/kaggle/working/DiffPuter_AttentionV1/ckpt/{dataname}/rate{ratio}/{mask_type}/{split_idx}/{num_trials}_{num_steps}'
         os.makedirs(f'{ckpt_dir}/{iteration}') if not os.path.exists(f'{ckpt_dir}/{iteration}') else None
 
         print(f'iteration: {iteration}')
