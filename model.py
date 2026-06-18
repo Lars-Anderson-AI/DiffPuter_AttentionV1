@@ -100,23 +100,31 @@ class MLPDiffusion(nn.Module):
         self.dim_t = dim_t
         self.num_tokens = num_tokens
         
-        # Ensure dim_t can be evenly split into tokens
         assert dim_t % num_tokens == 0, "dim_t must be perfectly divisible by num_tokens"
         self.token_dim = dim_t // num_tokens
 
-        # Project input to hidden dimension
+        # 1. Project input to hidden dimension
         self.proj = nn.Linear(d_in, dim_t)
 
-        # --- Added Attention Mechanism Block ---
-        # Treating split features as a sequence of tokens
-        self.attn = nn.MultiheadAttention(
-            embed_dim=self.token_dim, 
-            num_heads=num_heads, 
-            batch_first=True
+        # 2. Time Embedding layers
+        self.map_noise = PositionalEmbedding(num_channels=dim_t)
+        self.time_embed = nn.Sequential(
+            nn.Linear(dim_t, dim_t),
+            nn.SiLU(),
+            nn.Linear(dim_t, dim_t)
         )
-        self.ln_attn = nn.LayerNorm(dim_t)
 
-        # Your original MLP layers
+        # 3. KOREKSI: Gunakan Transformer Encoder Layer yang utuh dan stabil
+        # Ini identik dengan arsitektur standar Transformer
+        self.transformer_layer = nn.TransformerEncoderLayer(
+            d_model=self.token_dim, 
+            nhead=num_heads, 
+            dim_feedforward=self.token_dim * 2,
+            batch_first=True,
+            activation='gelu'
+        )
+
+        # 4. Final MLP
         self.mlp = nn.Sequential(
             nn.Linear(dim_t, dim_t * 2),
             nn.SiLU(),
@@ -127,42 +135,29 @@ class MLPDiffusion(nn.Module):
             nn.Linear(dim_t, d_in),
         )
 
-        # Your original Time Embedding layers
-        self.map_noise = PositionalEmbedding(num_channels=dim_t)
-        self.time_embed = nn.Sequential(
-            nn.Linear(dim_t, dim_t),
-            nn.SiLU(),
-            nn.Linear(dim_t, dim_t)
-        )
-
-    # PERUBAHAN: Menyesuaikan parameter agar dipanggil dengan aman oleh class Precond
     def forward(self, x, noise_labels, class_labels=None):
-        
-        # 1. Compute Time Embedding (DIKEMBALIKAN KE LOGIKA ASLI)
+        # A. Hitung Waktu (Time Embedding) terlebih dahulu
         emb = self.map_noise(noise_labels)
-        emb = emb.reshape(emb.shape[0], 2, -1).flip(1).reshape(*emb.shape) # swap sin/cos
+        emb = emb.reshape(emb.shape[0], 2, -1).flip(1).reshape(*emb.shape)
         emb = self.time_embed(emb) # Shape: (B, dim_t)
         
-        # 2. Initial Feature Projection
+        # B. Proyeksi fitur awal
         h = self.proj(x)  # Shape: (B, dim_t)
         orig_shape = h.shape
         
-        # 3. Feature-Splitting Self-Attention Block
-        # Dynamically reshape to (Batch, num_tokens, token_dim)
-        h_tokens = h.view(-1, self.num_tokens, self.token_dim)
+        # C. KOREKSI PALING PENTING: Gabungkan waktu SEBELUM attention!
+        # Agar attention tau di tahap noise mana dia sedang bekerja
+        h = h + emb 
         
-        # Compute multi-head self-attention
-        attn_out, _ = self.attn(h_tokens, h_tokens, h_tokens)
+        # D. Reshape menjadi Token
+        h_tokens = h.view(-1, self.num_tokens, self.token_dim) # Shape: (B, num_tokens, token_dim)
         
-        # Apply residual connection, reshape back, and normalize
-        h_tokens = h_tokens + attn_out
+        # E. Lewatkan ke Transformer Block (Self-Attention yang distabilisasi)
+        h_tokens = self.transformer_layer(h_tokens)
+        
+        # F. Kembalikan ke bentuk asal dan teruskan ke MLP
         h = h_tokens.view(*orig_shape)
-        h = self.ln_attn(h)
-
-        # 4. Inject Time Embedding ke dalam fitur yang sudah melewati Attention
-        h = h + emb  
-
-        # 5. Final MLP mapping back to data space
+        
         out = self.mlp(h)
         return out
 
