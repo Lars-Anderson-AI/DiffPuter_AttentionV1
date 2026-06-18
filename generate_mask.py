@@ -14,7 +14,7 @@ from pandas.api.types import is_numeric_dtype
 
 import pdb
 
-DATA_DIR = '/kaggle/working/DiffPuterBased/datasets'
+DATA_DIR = '/kaggle/working/DiffPuter_Attention/datasets'
 torch.set_default_dtype(torch.float32)
 
 '''
