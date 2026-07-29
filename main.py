@@ -50,7 +50,7 @@ parser.add_argument('--hid_dim', type=int, default=1024, help='Hidden dimension.
 parser.add_argument('--mask', type=str, default='MCAR', help='Masking machenisms.')
 parser.add_argument('--num_trials', type=int, default=20, help='Number of sampling times.')
 parser.add_argument('--num_steps', type=int, default=50, help='Number of diffusion steps.')
-
+parser.add_argument('--attn_type', type=str, default='base', choices=['base', 'gated', 'hybrid_skip'], help='Tipe Attention')
 args = parser.parse_args()
 
 # check cuda
@@ -125,7 +125,7 @@ if __name__ == '__main__':
 
         num_epochs = 10000 + 1
 
-        denoise_fn = MLPDiffusion(in_dim, hid_dim).to(device)
+        denoise_fn = MLPDiffusion(in_dim, hid_dim, attn_type=args.attn_type).to(device)
 
         if iteration == 0:
             print(denoise_fn)
