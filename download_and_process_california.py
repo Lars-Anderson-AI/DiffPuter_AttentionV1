@@ -2,10 +2,8 @@ import os
 import numpy as np
 import pandas as pd
 from urllib import request
-import shutil
 import zipfile
 import json
-from sklearn.datasets import fetch_california_housing # <--- TAMBAHAN IMPORT
 from generate_mask import generate_mask
 
 DATA_DIR = '/kaggle/working/DiffPuter_AttentionV1/datasets'
@@ -41,20 +39,30 @@ def download_from_uci(name):
         print(f'{name} already downloaded.')
 
 # =====================================================================
-# FUNGSI BARU UNTUK PROSES DATASET CALIFORNIA
+# PROSES CALIFORNIA: MENGAMBIL DATA DARI KAGGLE & MENGHAPUS OCEAN_PROXIMITY
 # =====================================================================
 def process_california():
-    print('Start processing dataset california from sklearn.')
+    print('Start processing dataset california from Kaggle source.')
     save_dir = f'{DATA_DIR}/california'
     os.makedirs(save_dir, exist_ok=True)
     
-    # Mengambil California Housing Dataset (20,640 baris, 9 kolom numerik)
-    california = fetch_california_housing(as_frame=True)
-    data_df = california.frame # Terdiri dari 8 fitur + 1 target (MedHouseVal)
-    
+    url = "https://raw.githubusercontent.com/ageron/handson-ml2/master/datasets/housing/housing.csv"
+    raw_csv_path = f'{save_dir}/housing.csv'
     save_path = f'{save_dir}/data.csv'
-    data_df.to_csv(save_path, index=False)
-    print(f'Finish processing california. Saved to {save_path}')
+    
+    # Download file dari Kaggle mirror jika belum ada
+    if not os.path.exists(raw_csv_path):
+        print(f'Downloading housing.csv from Kaggle source...')
+        request.urlretrieve(url, raw_csv_path)
+    
+    df = pd.read_csv(raw_csv_path)
+    
+    # EKSPLISIT: Buang kolom 'ocean_proximity' agar tersisa 9 kolom numerik murni (sesuai Paper)
+    if 'ocean_proximity' in df.columns:
+        df = df.drop(columns=['ocean_proximity'])
+        
+    df.to_csv(save_path, index=False)
+    print(f'California data processed with 9 numerical columns. Saved to {save_path}')
 # =====================================================================
 
 def process_adult():
@@ -130,6 +138,9 @@ def process_bean():
     df_cleaned = data_df.dropna()
     df_cleaned.to_csv(save_path, index=False)
 
+# =====================================================================
+# PEMISAHAN DATA TRAIN & TEST (DISESUAIKAN UNTUK 9 KOLOM NUMERIK)
+# =====================================================================
 def train_test_split(dataname, ratio=0.7, mask_prob=0.3):
     data_dir = f'{DATA_DIR}/{dataname}'
     path = f'{DATA_DIR}/{dataname}/data.csv'
@@ -145,8 +156,11 @@ def train_test_split(dataname, ratio=0.7, mask_prob=0.3):
     total_num = data_df.shape[0]
 
     if len(cat_idx) == 0:
-        data_values = data_df.values[:, :-1].astype(np.float32)
+        # Mengambil kolom numerik sesuai num_idx
+        data_values = data_df.iloc[:, num_idx].values.astype(np.float32)
+
         nan_idx = np.isnan(data_values).nonzero()[0]
+
         keep_idx = list(set(np.arange(data_values.shape[0])) - set(list(nan_idx)))
         keep_idx = np.array(keep_idx)
     else:
@@ -176,22 +190,19 @@ def train_test_split(dataname, ratio=0.7, mask_prob=0.3):
 
 
 if __name__ == '__main__':
-    # List dataset UCI
-    all_uci_names = list(NAME_URL_DICT_UCI.keys())
-    
-    # 1. Download UCI
-    for name in all_uci_names:
+
+    # 1. Download & Process UCI datasets
+    for name in NAME_URL_DICT_UCI.keys():
         download_from_uci(name)
 
-    # 2. Process UCI datasets
-    for name in all_uci_names:
+    for name in NAME_URL_DICT_UCI.keys():
         eval(f'process_{name}()')
         train_test_split(name, ratio=0.7, mask_prob=0.3)
         for mask_type in ['MCAR', 'MAR', 'MNAR_logistic_T2']:
             for mask_p in [0.3]:
                 generate_mask(dataname=name, mask_type=mask_type, mask_num=10, p=mask_p)
-
-    # 3. Process California Dataset
+    
+    # 2. Download & Process California Housing (Sesuai Paper)
     process_california()
     train_test_split('california', ratio=0.7, mask_prob=0.3)
     for mask_type in ['MCAR', 'MAR', 'MNAR_logistic_T2']:
