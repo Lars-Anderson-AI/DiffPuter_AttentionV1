@@ -72,6 +72,7 @@ if __name__ == '__main__':
     ratio = args.ratio
     num_trials = args.num_trials
     num_steps = args.num_steps
+    attn_type = args.attn_type
 
     if mask_type == 'MNAR':
         mask_type = 'MNAR_logistic_T2'
