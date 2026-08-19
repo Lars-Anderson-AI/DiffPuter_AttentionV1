@@ -102,7 +102,7 @@ if __name__ == '__main__':
 
         ## M-Step: Density Estimation
      
-        ckpt_dir = f'/kaggle/working/DiffPuter_AttentionV1/ckpt/{dataname}/rate{ratio}/{mask_type}/{split_idx}/{num_trials}_{num_steps}'
+        ckpt_dir = f'/kaggle/working/DiffPuter_AttentionV1/ckpt/{dataname}/rate{ratio}/{mask_type}/{split_idx}/{attn_type}_{num_trials}_{num_steps}'
         os.makedirs(f'{ckpt_dir}/{iteration}') if not os.path.exists(f'{ckpt_dir}/{iteration}') else None
 
         print(f'iteration: {iteration}')
@@ -126,7 +126,8 @@ if __name__ == '__main__':
 
         num_epochs = 10000 + 1
 
-        denoise_fn = MLPDiffusion(in_dim, hid_dim, attn_type=args.attn_type).to(device)
+        denoise_fn = MLPDiffusion(in_dim, hid_dim, attn_type=attn_type).to(device)
+
 
         if iteration == 0:
             print(denoise_fn)
@@ -205,7 +206,7 @@ if __name__ == '__main__':
   
             in_dim = X.shape[1]
 
-            denoise_fn = MLPDiffusion(in_dim, hid_dim).to(device)
+            denoise_fn = MLPDiffusion(in_dim, hid_dim, attn_type=attn_type).to(device)
 
             model = Model(denoise_fn = denoise_fn, hid_dim = in_dim).to(device)
             model.load_state_dict(torch.load(f'{ckpt_dir}/{iteration}/model.pt'))
@@ -261,7 +262,7 @@ if __name__ == '__main__':
 
             in_dim = X_test.shape[1]
 
-            denoise_fn = MLPDiffusion(in_dim, hid_dim).to(device)
+            denoise_fn = MLPDiffusion(in_dim, hid_dim, attn_type=attn_type).to(device)
 
             model = Model(denoise_fn = denoise_fn, hid_dim = in_dim).to(device)
             model.load_state_dict(torch.load(f'{ckpt_dir}/{iteration}/model.pt'))
